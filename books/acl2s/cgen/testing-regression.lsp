@@ -76,13 +76,13 @@
 (defdata-attach num-pair :enumerator nth-num-pair-user)
 (defdata-attach num-pair :enum/acc nth-num-pair/acc-user)
 (must-fail ; fail or pass?
-(test?
- (implies (and (num-pairp p)
-               ;(prop p)
-               )
+ (test?
+  (implies (and (num-pairp p)
+;(prop p)
+                )
            (> (num-pair-n p) (num-pair-m p))))
-
-)
+ 
+ )
 
 
 
