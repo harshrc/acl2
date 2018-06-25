@@ -81,8 +81,17 @@ data last modified: [2017-06-22 Thu]
 ;(defun range-pred-I (x s) `(acl2::in-tau-intervalp ,x ',(get-tau-int (cadr s) (third s))))
 (defun range-pred-I (x s) `(AND . ,(make-acl2-range-constraints x (cadr s) (third s))))
 
+(defun complex-< (x1 y1)
+  (declare (xargs :guard (and (complex-rationalp x1)
+                              (complex-rationalp y1))))
+  (or (< (realpart x1) (realpart y1))
+      (and (equal (realpart x1) (realpart y1))
+           (< (imagpart x1) (imagpart y1)))))
 
+(defmacro complex-> (x1 y1)
+  `(complex-< ,y1 ,x1))
 
+;; add complex-rationalp case which can come from cgen on-the-fly ranges.
 (defun make-enum-body-for-range (r domain lo hi lo-rel hi-rel)
     (case domain
       (acl2s::integer (let ((lo (and lo (if lo-rel (1+ lo) lo))) ;make both inclusive bounds
@@ -103,7 +112,7 @@ data last modified: [2017-06-22 Thu]
                              (t ;lo is neg inf, and hi is <= 0
                               `(- ,hi (acl2s::nth-nat-testing ,r)))))) ;ans shud be less than or equal to hi
       
-      (otherwise  (let* ((gap (/ (- (rfix hi) (rfix lo)) 1000))
+      (acl2s::rational  (let* ((gap (/ (- (rfix hi) (rfix lo)) 1000))
                         (lo (and lo (if lo-rel (+ gap lo) lo))) ;make both inclusive bounds
                         (hi (and hi (if hi-rel (- hi gap) hi))))
                     (cond ((and lo hi)
@@ -119,7 +128,24 @@ data last modified: [2017-06-22 Thu]
                               rat-ans))) ;ans shud be less than or equal to hi
                         
                         (t ;lo is neg infinity and hi is is <= 0
-                         `(- ,hi (acl2s::nth-positive-rational-testing ,r))))))))
+                         `(- ,hi (acl2s::nth-positive-rational-testing ,r))))))
+      (otherwise  (let* ((gap (/ (- (rfix hi) (rfix lo)) 1000))
+                        (lo (and lo (if lo-rel (+ gap lo) lo))) ;make both inclusive bounds
+                        (hi (and hi (if hi-rel (- hi gap) hi))))
+                    (cond ((and lo hi)
+                         `(acl2s::nth-complex-rational-between ,r ,lo ,hi))
+
+                        (lo ;hi is positive infinity
+                         `(+ ,lo (acl2s::nth-positive-complex-rational ,r)))
+                        
+                        ((> hi 0) ;lo is neg infinity and hi is is >= 1
+                         `(let ((rat-ans (acl2s::nth-complex-rational ,r)))
+                            (if (complex-> rat-ans ,hi)
+                                (complex (mod (realpart rat-ans) (1+ ,hi)) (imagpart rat-ans))
+                              rat-ans))) ;ans shud be less than or equal to hi
+                        
+                        (t ;lo is neg infinity and hi is is <= 0
+                         `(- ,hi (acl2s::nth-positive-complex-rational ,r))))))))
 
 (defun range-enum-I (i s)
   (b* ((tau-interval (get-tau-int (cadr s) (third s)))
@@ -248,15 +274,18 @@ data last modified: [2017-06-22 Thu]
 (defun make-enum-exp-for-bounded-range (ivar seedvar dom sampling-dist)
   (b* ((weights (strip-cars sampling-dist))
        (ctx 'make-enum-exp-for-bounded-range)
-       (nth-fn (if (eq dom 'acl2s::integer)
-                   'acl2s::nth-integer
-                 'acl2s::nth-rational))
-       (nth-pos-fn (if (eq dom 'acl2s::integer)
-                       'acl2s::nth-nat
-                     'acl2s::nth-positive-rational))
-       (between-fn (if (eq dom 'acl2s::integer)
-                       'defdata::random-integer-between-seed
-                     'defdata::random-rational-between-seed)))
+       (nth-fn (case dom
+                 (acl2s::integer 'acl2s::nth-integer)
+                 (acl2s::rational 'acl2s::nth-rational)
+                 (otherwise 'acl2s::nth-complex-rational)))
+       (nth-pos-fn (case dom
+                     (acl2s::integer 'acl2s::nth-nat)
+                     (acl2s::rational 'acl2s::nth-positive-rational)
+                     (otherwise 'acl2s::nth-positive-complex-rational)))
+       (between-fn (case dom
+                     (acl2s::integer 'defdata::random-integer-between-seed)
+                     (acl2s::rational 'defdata::random-rational-between-seed)
+                     (otherwise 'defdata::random-complex-rational-between-seed))))
 
 
     `(b* (((mv idx (the (unsigned-byte 31) ,seedvar))

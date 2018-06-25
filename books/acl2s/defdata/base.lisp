@@ -564,18 +564,23 @@
 (defun nth-complex-rational-builtin (n)
   (declare (xargs :guard (natp n)))
   (let* ((two-n-list (defdata::split-nat 2 n))
-         (rpart (nth-positive-rational-builtin (defdata::nfixg (car two-n-list))))
-         (ipart (nth-positive-rational-builtin (defdata::nfixg (cadr two-n-list)))))
+         (rpart (nth-rational-builtin (defdata::nfixg (car two-n-list))))
+         (ipart (nth-rational-builtin (defdata::nfixg (cadr two-n-list)))))
     (complex rpart ipart)))
 
+
+
 (defun nth-complex-rational-between (n lo hi)
-  (declare (xargs :guard (and (natp n) (complex/complex-rationalp lo) (complex/complex-rationalp hi))))
-  (b* ((rlo (realpart lo))
-       (rhi (realpart hi))
-       (ilo (imagpart lo))
-       (ihi (imagpart hi))
+  (declare (xargs :guard (and (natp n)
+                              (acl2-numberp lo)
+                              (acl2-numberp hi))))
+  (b* ((rlo (if (complex/complex-rationalp lo) (realpart lo) lo))
+       (rhi (if (complex/complex-rationalp hi) (realpart hi) hi))
+       (ilo (if (complex/complex-rationalp lo) (imagpart lo) lo))
+       (ihi (if (complex/complex-rationalp hi) (imagpart hi) hi))
        ((list n1 n2) (defdata::split-nat 2 n)))
-    (complex (nth-rational-between n1 rlo rhi) (nth-rational-between n2 ilo ihi))))
+      (complex (nth-rational-between n1 rlo rhi)
+               (nth-rational-between n2 ilo ihi))))
 
 
 ;; (encapsulate 
@@ -719,6 +724,8 @@
   (let ((n-small (mod n *number-testing-limit*)))
     (nth-complex-rational-builtin n-small)))
 
+(defun nth-positive-complex-rational (n)
+  (nth-complex-rational-between n 0 *number-testing-limit*))
 
 
 ; register-type ought to also test if not prove the following:

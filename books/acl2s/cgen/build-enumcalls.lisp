@@ -158,14 +158,27 @@
 
 (include-book "../defdata/builtin-combinators")
 
-(def make-range-enum-info% (interval integer-p)
-  (decl :sig ((non-empty-non-universal-interval-p booleanp) -> enum-info%-p)
+(defun range-domain (pred-fn wrld)
+  (declare (xargs :guard (and (proper-symbolp pred-fn)
+                              (plist-worldp wrld))
+                  :verify-guards nil))
+  (cond ((defdata::subtype-p pred-fn 'acl2::integerp wrld)
+         'acl2s::integer)
+
+        ((defdata::subtype-p pred-fn 'acl2::rationalp wrld)
+         'acl2s::rational)
+
+        (t 'acl2s::complex-rational)))
+  
+
+(def make-range-enum-info% (interval domain)
+  (decl :sig ((non-empty-non-universal-interval-p domain) -> enum-info%-p)
         :doc "given tau-interval interval construct an enum-info% rec with appropriate enum calls")
   (b* ((lo (acl2::access acl2::tau-interval interval :lo))
        (hi (acl2::access acl2::tau-interval interval :hi))
        (lo-rel (acl2::access acl2::tau-interval interval :lo-rel))
        (hi-rel (acl2::access acl2::tau-interval interval :hi-rel))
-       (domain (if integer-p 'acl2s::integer 'acl2s::rational))
+       (integer-p (eq domain 'acl2s::integer))
        (dom-size (if (and lo hi integer-p)
                      (- (if hi-rel (1- hi) hi) (if lo-rel (1+ lo) lo))
                    't)))
@@ -214,9 +227,9 @@
              ((when (or (and (consp TI.def)
                              (eq 'ACL2S::RANGE (car TI.def))
                              (defdata::range-subtype-p range (defdata::get-tau-int (cadr TI.def) (third TI.def))))
-                        (and (defdata::subtype-p TI.pred 'acl2-numberp wrld)
+                        (and (defdata::subtype-p TI.pred 'acl2::acl2-numberp wrld)
                              (non-empty-non-universal-interval-p range))))
-              (make-range-enum-info% range (defdata::subtype-p TI.pred 'integerp wrld))))
+              (make-range-enum-info% range (range-domain TI.pred wrld))))
                                              
               
              ;first check for test-enum
