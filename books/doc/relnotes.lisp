@@ -192,6 +192,18 @@
  fapply-terms-same-args) to apply each function in a specified list to a
  specified list of arguments.</p>
 
+ <p>A new event, @(tsee defunt), is a variant of @(tsee defun) that uses
+ termination theorems from a large set of @(see community-books) &mdash;
+ namely, all books included in @('books/doc/top.lisp'), which is the book that
+ creates the ACL2+Books manual &mdash; to generate termination proofs
+ automatically.  Those proofs use @(':')@(tsee termination-theorem) @(see
+ lemma-instance)s that reference @('defun') events in those included books.
+ Several new supporting utilities are documented: @(tsee fms!-lst), which
+ writes a list to a character output channel; @(tsee injections), which lists
+ all maps from a domain to a range; @(tsee strict-merge-sort-<), which sorts without
+ duplicates; and @(tsee subsetp-eq-linear), which is a linear-time subset test
+ for sorted lists of symbols.</p>
+
  <h3>Changes to Existing Libraries</h3>
 
  <p>The behavior and code for the expander (see @(see defthm?)) have been
@@ -299,14 +311,14 @@
  <h4><see topic='@(url x86isa)'>X86ISA</see></h4>
 
  <p>The model includes more support for 32-bit mode.  In particular: (some
- variants of) the PUSH, POP, MOV, LEA, XCHG, CMPXCHG, ADD, ADC, SUB, SBB, OR,
- AND, XOR, NEG, NOT, CMP, TEST, MUL, IMUL, DIV, IDIV, INC with opcodes FEh-FFh,
- DEC with opcodes FEh-FFh, CBW, CWDE, CDQE, CWD, CDQ, CQO, ROL, ROR, RCL, RCR,
- SAL, SAR, SHL, SHR, BT, JMP, Jcc, JCXZ, JECXZ, JRCXZ, CMOVcc, SETcc, LOOP,
- LOOPcc, CALL, RET, CMC, CLC, STC, CLD, STD, SAHF, LAHF, RDRAND, HLT, and NOP
- instructions also work in 32-bit mode now; the 32-bit instructions PUSHA,
- POPA, INC with opcodes 40h-47h, and DEC with opcodes 48h-4Fh are now part of
- the model.</p>
+ variants of) the PUSH, PUSHF, POP, POPF, MOV, LEA, XCHG, CMPXCHG, ADD, ADC,
+ SUB, SBB, OR, AND, XOR, NEG, NOT, CMP, TEST, MUL, IMUL, DIV, IDIV, INC with
+ opcodes FEh-FFh, DEC with opcodes FEh-FFh, CBW, CWDE, CDQE, CWD, CDQ, CQO,
+ ROL, ROR, RCL, RCR, SAL, SAR, SHL, SHR, BT, JMP, Jcc, JCXZ, JECXZ, JRCXZ,
+ CMOVcc, SETcc, MOVS, LOOP, LOOPcc, CALL, RET, CMC, CLC, STC, CLD, STD, SAHF,
+ LAHF, RDRAND, HLT, and NOP instructions also work in 32-bit mode now; the
+ 32-bit instructions PUSHA, POPA, INC with opcodes 40h-47h, DEC with opcodes
+ 48h-4Fh, and PUSH CS/SS/DS/ES are now part of the model.</p>
 
  <p>Some of the XDOC documentation and some of the comments have been slightly
  expanded.</p>

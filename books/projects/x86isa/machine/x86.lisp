@@ -1,5 +1,40 @@
-;; AUTHOR:
-;; Shilpi Goel <shigoel@cs.utexas.edu>
+; X86ISA Library
+
+; Note: The license below is based on the template at:
+; http://opensource.org/licenses/BSD-3-Clause
+
+; Copyright (C) 2015, Regents of the University of Texas
+; All rights reserved.
+
+; Redistribution and use in source and binary forms, with or without
+; modification, are permitted provided that the following conditions are
+; met:
+
+; o Redistributions of source code must retain the above copyright
+;   notice, this list of conditions and the following disclaimer.
+
+; o Redistributions in binary form must reproduce the above copyright
+;   notice, this list of conditions and the following disclaimer in the
+;   documentation and/or other materials provided with the distribution.
+
+; o Neither the name of the copyright holders nor the names of its
+;   contributors may be used to endorse or promote products derived
+;   from this software without specific prior written permission.
+
+; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+; "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+; LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+; A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+; HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+; SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+; LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+; DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+; THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+; (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+; Original Author(s):
+; Shilpi Goel         <shigoel@cs.utexas.edu>
 
 (in-package "X86ISA")
 
@@ -981,14 +1016,8 @@
 
     (#xA0
      "(Push FS)"
-     (if (64-bit-modep x86)
-         (x86-push-segment-register start-rip temp-rip prefixes rex-byte opcode
-                                    modr/m sib x86)
-       (x86-step-unimplemented
-        (cons (cons "(PUSH FS) is not implemented in 32-bit mode."
-                    (ms x86))
-              (list start-rip temp-rip prefixes rex-byte opcode))
-        x86)))
+     (x86-push-segment-register
+      start-rip temp-rip prefixes rex-byte opcode modr/m sib x86))
 
     (#xA3
      "(BT Ev Gv)"
@@ -996,14 +1025,8 @@
 
     (#xA8
      "(Push GS)"
-     (if (64-bit-modep x86)
-         (x86-push-segment-register start-rip temp-rip prefixes rex-byte opcode
-                                    modr/m sib x86)
-       (x86-step-unimplemented
-        (cons (cons "(PUSH GS) is not implemented in 32-bit mode."
-                    (ms x86))
-              (list start-rip temp-rip prefixes rex-byte opcode))
-        x86)))
+     (x86-push-segment-register
+      start-rip temp-rip prefixes rex-byte opcode modr/m sib x86))
 
     (#xAE
      "(LDMXCSR/STMXCSR m32)"
@@ -1391,9 +1414,8 @@
 
     (#x06
      "(PUSH ES)"
-     (x86-step-unimplemented
-      (cons (ms x86)
-            (list start-rip temp-rip prefixes rex-byte opcode)) x86))
+     (x86-push-segment-register
+      start-rip temp-rip prefixes rex-byte opcode modr/m sib x86))
 
     (#x07
      "(POP ES)"
@@ -1433,10 +1455,8 @@
 
     (#x0E
      "(PUSH CS)"
-     (x86-step-unimplemented
-      (cons (ms x86)
-            (list start-rip temp-rip prefixes rex-byte opcode)) x86))
-
+     (x86-push-segment-register
+      start-rip temp-rip prefixes rex-byte opcode modr/m sib x86))
 
     (#x0F
      "Escape to secondary opcode map."
@@ -1475,9 +1495,8 @@
 
     (#x16
      "(PUSH SS)"
-     (x86-step-unimplemented
-      (cons (ms x86)
-            (list start-rip temp-rip prefixes rex-byte opcode)) x86))
+     (x86-push-segment-register
+      start-rip temp-rip prefixes rex-byte opcode modr/m sib x86))
 
     (#x17
      "(POP SS)"
@@ -1517,17 +1536,14 @@
 
     (#x1E
      "(PUSH DS)"
-     (x86-step-unimplemented
-      (cons (ms x86)
-            (list start-rip temp-rip prefixes rex-byte opcode)) x86))
-
+     (x86-push-segment-register
+      start-rip temp-rip prefixes rex-byte opcode modr/m sib x86))
 
     (#x1F
      "(POP DS)"
      (x86-step-unimplemented
       (cons (ms x86)
             (list start-rip temp-rip prefixes rex-byte opcode)) x86))
-
 
     (#x20
      "(AND Eb Gb)"
@@ -2229,25 +2245,13 @@
 
     (#x9C
      "(PUSHF d64 Fv) or (PUSHD d64 Fv) or (PUSHQ d64 Fv)"
-     (if (64-bit-modep x86)
-         (x86-pushf start-rip temp-rip prefixes rex-byte opcode modr/m sib
-                    x86)
-       (x86-step-unimplemented
-        (cons (cons "PUSHF/PUSHD/PUSHQ is not implemented in 32-bit mode."
-                    (ms x86))
-              (list start-rip temp-rip prefixes rex-byte opcode))
-        x86)))
+     (x86-pushf
+      start-rip temp-rip prefixes rex-byte opcode modr/m sib x86))
 
     (#x9D
      "(POPF d64 Fv) or (POPD d64 Fv) or (POPQ d64 Fv)"
-     (if (64-bit-modep x86)
-         (x86-popf start-rip temp-rip prefixes rex-byte opcode modr/m sib
-                   x86)
-       (x86-step-unimplemented
-        (cons (cons "POPF/POPD/POPQ is not implemented in 32-bit mode."
-                    (ms x86))
-              (list start-rip temp-rip prefixes rex-byte opcode))
-        x86)))
+     (x86-popf
+      start-rip temp-rip prefixes rex-byte opcode modr/m sib x86))
 
     (#x9E
      "(SAHF)"
@@ -2271,14 +2275,7 @@
 
     ((#xA4 #xA5)
      "MOVS; A4: (MOVSB Yb, Xb); A5: (MOVSW/D/Q Yv, Xv)"
-     (if (64-bit-modep x86)
-         (x86-movs start-rip temp-rip prefixes rex-byte opcode modr/m sib
-                   x86)
-       (x86-step-unimplemented
-        (cons (cons "MOVS/MOVSB/MOVSW is not implemented in 32-bit mode."
-                    (ms x86))
-              (list start-rip temp-rip prefixes rex-byte opcode))
-        x86)))
+     (x86-movs start-rip temp-rip prefixes rex-byte opcode modr/m sib x86))
 
     ((#xA6 #xA7)
      " CMPS; A6: (CMPSB Xb, Yb); A7: (CMPSW/D/Q Xv, Yv)"

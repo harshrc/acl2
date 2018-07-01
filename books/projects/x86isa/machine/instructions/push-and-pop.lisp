@@ -1,5 +1,43 @@
-;; AUTHOR:
-;; Shilpi Goel <shigoel@cs.utexas.edu>
+; X86ISA Library
+
+; Note: The license below is based on the template at:
+; http://opensource.org/licenses/BSD-3-Clause
+
+; Copyright (C) 2015, Regents of the University of Texas
+; Copyright (C) 2018, Kestrel Technology, LLC
+; All rights reserved.
+
+; Redistribution and use in source and binary forms, with or without
+; modification, are permitted provided that the following conditions are
+; met:
+
+; o Redistributions of source code must retain the above copyright
+;   notice, this list of conditions and the following disclaimer.
+
+; o Redistributions in binary form must reproduce the above copyright
+;   notice, this list of conditions and the following disclaimer in the
+;   documentation and/or other materials provided with the distribution.
+
+; o Neither the name of the copyright holders nor the names of its
+;   contributors may be used to endorse or promote products derived
+;   from this software without specific prior written permission.
+
+; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+; "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+; LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+; A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+; HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+; SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+; LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+; DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+; THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+; (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+; Original Author(s):
+; Shilpi Goel         <shigoel@cs.utexas.edu>
+; Contributing Author(s):
+; Alessandro Coglio   <coglio@kestrel.edu>
 
 (in-package "X86ISA")
 
@@ -373,31 +411,42 @@
 
     x86))
 
+; Extended to 32-bit mode by Alessandro Coglio <coglio@kestrel.edu>
 (def-inst x86-push-segment-register
-  :parents (two-byte-opcodes)
+  :parents (one-byte-opcodes two-byte-opcodes)
 
   :short "PUSH FS/GS"
-  :long "<p><tt>0F A0</tt>: \[PUSH FS\]</p>
-<p><tt>0F A8</tt>: \[PUSH GS\]</p>
-   <p>Pushing other segment registers in the 64-bit mode is
-   invalid.</p>
+  :long
+  "<p><tt>0E</tt>:    \[PUSH CS\]</p>
+   <p><tt>16</tt>:    \[PUSH SS\]</p>
+   <p><tt>1E</tt>:    \[PUSH DS\]</p>
+   <p><tt>06</tt>:    \[PUSH ES\]</p>
+   <p><tt>0F A0</tt>: \[PUSH FS\]</p>
+   <p><tt>0F A8</tt>: \[PUSH GS\]</p>
 
-<p>If the source operand is a segment register \(16 bits\) and the
- operand size is 64-bits, a zero- extended value is pushed on the
- stack; if the operand size is 32-bits, either a zero-extended value
- is pushed on the stack or the segment selector is written on the
- stack using a 16-bit move. For the last case, all recent Core and
- Atom processors perform a 16-bit move, leaving the upper portion of
- the stack location unmodified.</p>
+   <p>If the source operand is a segment register \(16 bits\) and the operand
+   size is 64-bits, a zero- extended value is pushed on the stack; if the
+   operand size is 32-bits, either a zero-extended value is pushed on the stack
+   or the segment selector is written on the stack using a 16-bit move. For the
+   last case, all recent Core and Atom processors perform a 16-bit move,
+   leaving the upper portion of the stack location unmodified.</p>
 
-<p>PUSH doesn't have a separate instruction semantic function, unlike
-other opcodes like ADD, SUB, etc. I've just coupled the decoding with
-the execution in this case.</p>"
+   <p>PUSH doesn't have a separate instruction semantic function, unlike other
+   opcodes like ADD, SUB, etc. The decoding is coupled with the execution in
+   this case.</p>"
 
   :returns (x86 x86p :hyp (and (x86p x86)
                                (canonical-address-p temp-rip)))
   :implemented
   (progn
+    (add-to-implemented-opcodes-table 'PUSH #x0E '(:nil nil)
+                                      'x86-push-segment-register)
+    (add-to-implemented-opcodes-table 'PUSH #x16 '(:nil nil)
+                                      'x86-push-segment-register)
+    (add-to-implemented-opcodes-table 'PUSH #x1E '(:nil nil)
+                                      'x86-push-segment-register)
+    (add-to-implemented-opcodes-table 'PUSH #x06 '(:nil nil)
+                                      'x86-push-segment-register)
     (add-to-implemented-opcodes-table 'PUSH #x0FA0 '(:nil nil)
                                       'x86-push-segment-register)
     (add-to-implemented-opcodes-table 'PUSH #x0FA8 '(:nil nil)
@@ -406,26 +455,42 @@ the execution in this case.</p>"
   :body
 
   (b* ((ctx 'x86-push-general-register)
-       (lock (eql #.*lock*
-                  (prefixes-slice :group-1-prefix prefixes)))
-       ((when lock)
-        (!!fault-fresh :ud nil :lock-prefix prefixes)) ;; #UD
+
+       (lock (eql #.*lock* (prefixes-slice :group-1-prefix prefixes)))
+       ((when lock) (!!fault-fresh :ud nil :lock-prefix prefixes)) ;; #UD
+
+       ;; PUSH CS/SS/DS/ES are invalid in 64-bit mode:
+       ((when (and (64-bit-modep x86)
+                   (member opcode '(#x0E #x16 #x1E #x06))))
+        (!!fault-fresh :ud nil :push-segment-64-bit-mode opcode)) ;; #UD
 
        (p3? (eql #.*operand-size-override*
                  (prefixes-slice :group-3-prefix prefixes)))
+
        ((the (integer 1 8) operand-size)
-        (if p3?
-            2
-          ;; 4-byte operand size is N.E. in 64-bit mode
-          ;; See http://www.x86-64.org/documentation/assembly.html
-          8))
-       (rsp (rgfi *rsp* x86))
-       (new-rsp (- rsp operand-size))
-       ((when (not (canonical-address-p new-rsp)))
-        (!!fault-fresh :ss 0 :new-rsp-not-canonical new-rsp)) ;; #SS(0)
+        (if (64-bit-modep x86)
+            (if p3? 2 8)
+          (b* ((cs-hidden (xr :seg-hidden *cs* x86))
+               (cs-attr (hidden-seg-reg-layout-slice :attr cs-hidden))
+               (cs.d
+                (code-segment-descriptor-attributes-layout-slice :d cs-attr)))
+            (if (= cs.d 1)
+                (if p3? 2 4)
+              (if p3? 4 2)))))
+
+       (rsp (read-*sp x86))
+       ((mv flg new-rsp) (add-to-*sp rsp (- operand-size) x86))
+       ((when flg) (!!fault-fresh :ss 0 :push flg)) ;; #SS(0)
 
        ((the (unsigned-byte 16) val)
-        (seg-visiblei (if (eql opcode #xA0) *FS* *GS*) x86))
+        (seg-visiblei (case opcode
+                        (#x0E *CS*)
+                        (#x16 *SS*)
+                        (#x1E *DS*)
+                        (#x06 *ES*)
+                        (#xA0 *FS*)
+                        (t *GS*))
+                      x86))
 
        (badlength? (check-instruction-length start-rip temp-rip 0))
        ((when badlength?)
@@ -454,8 +519,8 @@ the execution in this case.</p>"
          (t ;; Unclassified error!
           (!!fault-fresh flg))))
 
-       (x86 (!rgfi *rsp* (the (signed-byte #.*max-linear-address-size*) new-rsp) x86))
-       (x86 (!rip temp-rip x86)))
+       (x86 (write-*sp new-rsp x86))
+       (x86 (write-*ip temp-rip x86)))
 
     x86))
 
@@ -797,6 +862,7 @@ the execution in this case.</p>"
 ;; INSTRUCTION: PUSHF/PUSHFQ
 ;; ======================================================================
 
+; Extended to 32-bit mode by Alessandro Coglio <coglio@kestrel.edu>
 (def-inst x86-pushf
 
   ;; #x9C: Op/En: NP
@@ -811,20 +877,27 @@ the execution in this case.</p>"
   :body
 
   (b* ((ctx 'x86-pushf)
+
        (lock? (equal #.*lock* (prefixes-slice :group-1-prefix prefixes)))
-       ((when lock?)
-        (!!fault-fresh :ud nil :lock-prefix prefixes)) ;; #UD
+       ((when lock?) (!!fault-fresh :ud nil :lock-prefix prefixes)) ;; #UD
+
        (p3? (equal #.*operand-size-override*
                    (prefixes-slice :group-3-prefix prefixes)))
+
        ((the (integer 1 8) operand-size)
-        (if p3?
-            2
-          ;; 4-byte operand size is N.E. in 64-bit mode
-          8))
-       (rsp (rgfi *rsp* x86))
-       (new-rsp (- rsp operand-size))
-       ((when (not (canonical-address-p new-rsp)))
-        (!!fault-fresh :ss 0 :new-rsp-not-canonical new-rsp)) ;; #SS(0)
+        (if (64-bit-modep x86)
+            (if p3? 2 8)
+          (b* ((cs-hidden (xr :seg-hidden *cs* x86))
+               (cs-attr (hidden-seg-reg-layout-slice :attr cs-hidden))
+               (cs.d
+                (code-segment-descriptor-attributes-layout-slice :d cs-attr)))
+            (if (= cs.d 1)
+                (if p3? 2 4)
+              (if p3? 4 2)))))
+
+       (rsp (read-*sp x86))
+       ((mv flg new-rsp) (add-to-*sp rsp (- operand-size) x86))
+       ((when flg) (!!fault-fresh :ss 0 :push flg)) ;; #SS(0)
 
        ((the (unsigned-byte 32) eflags) (rflags x86))
 
@@ -862,14 +935,15 @@ the execution in this case.</p>"
           (!!fault-fresh :ac 0 :memory-access-unaligned flg)) ;; #AC(0)
          (t ;; Unclassified error!
           (!!fault-fresh flg))))
-       (x86 (!rip temp-rip x86))
-       (x86 (!rgfi *rsp* new-rsp x86)))
+       (x86 (write-*sp new-rsp x86))
+       (x86 (write-*ip temp-rip x86)))
     x86))
 
 ;; ======================================================================
 ;; INSTRUCTION: POPF/POPFQ
 ;; ======================================================================
 
+; Extended to 32-bit mode by Alessandro Coglio <coglio@kestrel.edu>
 (def-inst x86-popf
 
   ;; #x9D
@@ -879,15 +953,19 @@ the execution in this case.</p>"
   ;; the top of stack to RFLAGS.  POPFQ pops 64-bits from the stack,
   ;; loads the lower 32 bits into rflags, and zero-extends the upper
   ;; bits of eflags."
+  ;; TODO: the text just above does not refer to the latest manual (May 2018),
+  ;; which does not seem to contain that text in the page for POPF/POPFD/POPFQ;
+  ;; should this text be removed?
 
   ;; TO-DO@Shilpi: For the time being, I am going to assume that the
   ;; CPL is 0.
 
-  ;; 64-bit mode operation of x86-popf:
+  ;; 64-bit and 32-bit mode operation of x86-popf:
+  ;; (we do not model real-address, virtual-8086, and VME -- Intel Table 4-15)
 
   ;; if cpl > 0 then
 
-  ;;    if operand-size = 8 then
+  ;;    if operand-size = 8 or operand-size = 4 then
 
   ;;       if cpl > iopl then
   ;;          rflags := 64-bit-pop()
@@ -935,29 +1013,28 @@ the execution in this case.</p>"
   :body
 
   (b* ((ctx 'x86-popf)
+
        (lock? (equal #.*lock* (prefixes-slice :group-1-prefix prefixes)))
-       ((when lock?)
-        (!!fault-fresh :ud nil :lock-prefix prefixes)) ;; #UD
+       ((when lock?) (!!fault-fresh :ud nil :lock-prefix prefixes)) ;; #UD
+
        (p3? (equal #.*operand-size-override*
                    (prefixes-slice :group-3-prefix prefixes)))
+
        ((the (integer 1 8) operand-size)
-        (if p3?
-            2
-          ;; 4-byte operand size is N.E. in 64-bit mode
-          8))
-       (rsp (rgfi *rsp* x86))
-       ((when (not (canonical-address-p rsp)))
-        (!!fault-fresh :ss 0 :rsp-not-canonical rsp)) ;; #SS(0)
-       ((the (signed-byte #.*max-linear-address-size+1*) new-rsp)
-        (+ (the (signed-byte #.*max-linear-address-size*) rsp) operand-size))
-       ;; Raise a #SS exception.
-       ((when (mbe :logic (not (canonical-address-p new-rsp))
-                   :exec (<= #.*2^47*
-                             (the (signed-byte
-                                   #.*max-linear-address-size+1*)
-                                  new-rsp))))
-        (!!fault-fresh :ss 0
-                       :ss-exception-new-rsp-not-canonical new-rsp)) ;; #SS(0)
+        (if (64-bit-modep x86)
+            (if p3? 2 8)
+          (b* ((cs-hidden (xr :seg-hidden *cs* x86))
+               (cs-attr (hidden-seg-reg-layout-slice :attr cs-hidden))
+               (cs.d
+                (code-segment-descriptor-attributes-layout-slice :d cs-attr)))
+            (if (= cs.d 1)
+                (if p3? 2 4)
+              (if p3? 4 2)))))
+
+       (rsp (read-*sp x86))
+
+       ((mv flg new-rsp) (add-to-*sp rsp operand-size x86))
+       ((when flg) (!!fault-fresh :ss 0 :push flg)) ;; #SS(0)
 
        ((mv flg0 val x86)
         (rme-size operand-size rsp *ss* :r (alignment-checking-enabled-p x86) x86
@@ -979,7 +1056,7 @@ the execution in this case.</p>"
         (logior 2 (the (unsigned-byte 32) (logand #x3f7fd7 val))))
 
        ;; Update the x86 state:
-       (x86 (!rgfi *rsp* new-rsp x86))
+       (x86 (write-*sp new-rsp x86))
        (x86
         (case operand-size
           (2
@@ -1004,13 +1081,7 @@ the execution in this case.</p>"
        ;; caught in x86-fetch-decode-execute, that is, before control
        ;; reaches this function.
 
-       ((when (mbe :logic (not (canonical-address-p temp-rip))
-                   :exec (<= #.*2^47*
-                             (the (signed-byte
-                                   #.*max-linear-address-size+1*)
-                                  temp-rip))))
-        (!!ms-fresh :virtual-memory-error temp-rip))
-       (x86 (!rip temp-rip x86)))
+       (x86 (write-*ip temp-rip x86)))
     x86))
 
 ;; ======================================================================
